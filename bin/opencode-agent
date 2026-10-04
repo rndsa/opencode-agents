@@ -1,0 +1,121 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# ==============================================================================
+# OpenCode Soul & Agent Manager - CLI Controller for agent.md
+# ==============================================================================
+
+set -e
+
+CONFIG_DIR="$HOME/.config/opencode"
+AGENT_FILE="$CONFIG_DIR/agent.md"
+OPENCODE_JSON="$CONFIG_DIR/opencode.json"
+
+# ANSI Colors
+ESC="\033"
+C_RESET="${ESC}[0m"
+C_BOLD="${ESC}[1m"
+C_DIM="${ESC}[38;5;242m"
+C_CYAN="${ESC}[38;5;81m"
+C_GREEN="${ESC}[38;5;120m"
+C_WHITE="${ESC}[38;5;255m"
+C_YELLOW="${ESC}[38;5;221m"
+
+wipe_screen() {
+    clear 2>/dev/null || true
+    printf "${ESC}[H${ESC}[2J${ESC}[3J"
+}
+
+case "$1" in
+    "edit")
+        ${EDITOR:-nano} "$AGENT_FILE"
+        exit 0
+        ;;
+    "cat"|"show")
+        if [ -f "$AGENT_FILE" ]; then
+            cat "$AGENT_FILE"
+        else
+            echo "Error: $AGENT_FILE belum dibuat."
+        fi
+        exit 0
+        ;;
+    "sync")
+        # Ensure json config is wired up
+        node -e '
+        const fs = require("fs");
+        const path = process.env.HOME + "/.config/opencode/opencode.json";
+        let cfg = {};
+        try { cfg = JSON.parse(fs.readFileSync(path, "utf8")); } catch(e){}
+        cfg.$schema = cfg.$schema || "https://opencode.ai/config.json";
+        cfg.instructions = cfg.instructions || [];
+        if (!cfg.instructions.includes("{file:~/.config/opencode/agent.md}")) {
+            cfg.instructions.unshift("{file:~/.config/opencode/agent.md}");
+        }
+        cfg.agent = cfg.agent || {};
+        cfg.agent.build = cfg.agent.build || {};
+        cfg.agent.build.prompt = "{file:~/.config/opencode/agent.md}";
+        fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
+        ' 2>/dev/null || true
+        echo "Tersinkronisasi ke opencode.json."
+        exit 0
+        ;;
+esac
+
+# Interactive Menu
+wipe_screen
+echo ""
+echo -e "  ${C_CYAN}${C_BOLD}OpenCode${C_RESET} ${C_DIM}· Soul / Agent.md Manager${C_RESET}"
+echo ""
+
+if [ -f "$AGENT_FILE" ]; then
+    LINES=$(wc -l < "$AGENT_FILE")
+    BYTES=$(wc -c < "$AGENT_FILE")
+    echo -e "  ${C_GREEN}●${C_RESET} ${C_WHITE}Status:${C_RESET} ${C_GREEN}Aktif${C_RESET} ${C_DIM}($LINES baris, $BYTES bytes)${C_RESET}"
+    echo -e "  ${C_DIM}File  :${C_RESET} ${C_CYAN}$AGENT_FILE${C_RESET}"
+else
+    echo -e "  ${C_YELLOW}○${C_RESET} ${C_WHITE}Status:${C_RESET} ${C_YELLOW}Belum dibuat${C_RESET}"
+fi
+
+echo ""
+echo -e "  ${C_WHITE}Menu Pilihan:${C_RESET}"
+echo -e "   ${C_CYAN}1.${C_RESET} Edit agent.md ${C_DIM}(buka via nano)${C_RESET}"
+echo -e "   ${C_CYAN}2.${C_RESET} Lihat isi agent.md sekarang"
+echo -e "   ${C_CYAN}3.${C_RESET} Reset ke template bawaan"
+echo -e "   ${C_DIM}0. Keluar${C_RESET}"
+echo ""
+printf "  Pilih [0-3]: "
+read -r choice
+
+case "$choice" in
+    1)
+        ${EDITOR:-nano} "$AGENT_FILE"
+        ;;
+    2)
+        wipe_screen
+        echo -e "  ${C_CYAN}${C_BOLD}Isi $AGENT_FILE:${C_RESET}\n"
+        cat "$AGENT_FILE"
+        echo ""
+        ;;
+    3)
+        cat << 'EOF' > "$AGENT_FILE"
+# Workspace Identity & Soul
+
+You are an expert AI software engineer, systems architect, and personal assistant.
+Your operating principles:
+
+## 1. Tone & Persona
+- Direct, concise, technical, and outcome-oriented.
+- Zero fluff, no unsolicited preambles, and no conversational filler ("Certainly!", "I hope this helps!").
+- Lead with the solution, followed by necessary mechanics and architecture.
+
+## 2. Engineering Standards
+- Write clean, modular, and type-safe code.
+- Prioritize high performance, zero-copy memory patterns, and minimal latency.
+- Handle edge cases, runtime exceptions, and input validation proactively.
+- Never substitute stubs, placeholders, or pseudocode for working implementations.
+EOF
+        cp "$AGENT_FILE" "$CONFIG_DIR/AGENTS.md" 2>/dev/null || true
+        echo -e "\n  ${C_GREEN}✓ Berhasil di-reset ke template default!${C_RESET}\n"
+        ;;
+    0|*)
+        wipe_screen
+        ;;
+esac

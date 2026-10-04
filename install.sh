@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # ==============================================================================
-# OpenCode Agents Installer & Auto MT Manager Linker
+# OpenCode Soul / Agent.md Auto Installer
 # ==============================================================================
 
 set -e
@@ -15,11 +15,11 @@ else
     HAS_TTY=false
 fi
 
-# Clean screen
+# Clean screen & scrollback
 clear 2>/dev/null || true
 printf "\033[H\033[2J\033[3J"
 
-# Zinc / OpenCode Colors
+# OpenCode Colors
 ESC="\033"
 C_RESET="${ESC}[0m"
 C_BOLD="${ESC}[1m"
@@ -28,64 +28,107 @@ C_CYAN="${ESC}[38;5;81m"
 C_GREEN="${ESC}[38;5;120m"
 C_WHITE="${ESC}[38;5;255m"
 
-AGENTS_DIR="$HOME/.config/opencode/agents"
+CONFIG_DIR="$HOME/.config/opencode"
+AGENT_FILE="$CONFIG_DIR/agent.md"
+OPENCODE_JSON="$CONFIG_DIR/opencode.json"
 PREFIX_BIN="/data/data/com.termux/files/usr/bin"
-AGENT_BIN="$PREFIX_BIN/opencode-agents"
-MT_STORAGE_FILE="/sdcard/agent.md"
+CLI_BIN="$PREFIX_BIN/opencode-agent"
 
-mkdir -p "$AGENTS_DIR"
+mkdir -p "$CONFIG_DIR" "$PREFIX_BIN"
 
 echo ""
-echo -e "  ${C_CYAN}${C_BOLD}OpenCode${C_RESET} ${C_DIM}v2.0.19 · Auto Agents Setup${C_RESET}"
+echo -e "  ${C_CYAN}${C_BOLD}OpenCode${C_RESET} ${C_DIM}· Agent.md (Soul Prompt) Setup${C_RESET}"
 echo ""
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+# 1. Create agent.md if not exists
+if [ ! -f "$AGENT_FILE" ]; then
+    echo -e "  ${C_CYAN}›${C_RESET} Men-generate template dasar agent.md..."
+    cat << 'EOF' > "$AGENT_FILE"
+# Workspace Identity & Soul
 
-# 1. Sync Agent Templates
-echo -e "  ${C_CYAN}›${C_RESET} Memasang 7 template agent resmi..."
-TEMPLATES=(
-    "builder"
-    "reviewer"
-    "architect"
-    "security-audit"
-    "ui-designer"
-    "debugger"
-    "documenter"
-)
+You are an expert AI software engineer, systems architect, and personal assistant.
+Your operating principles:
 
-for t in "${TEMPLATES[@]}"; do
-    target="$AGENTS_DIR/$t.md"
-    if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/agents/$t.md" ]; then
-        cp "$SCRIPT_DIR/agents/$t.md" "$target"
-    else
-        curl -fsSL "https://raw.githubusercontent.com/rndsa/opencode-agents/main/agents/$t.md?v=$(date +%s)" -o "$target" 2>/dev/null || true
-    fi
-done
+## 1. Tone & Persona
+- Direct, concise, technical, and outcome-oriented.
+- Zero fluff, no unsolicited preambles, and no conversational filler ("Certainly!", "I hope this helps!").
+- Lead with the solution, followed by necessary mechanics and architecture.
 
-# If no active agent.md exists, set builder as default
-if [ ! -f "$AGENTS_DIR/agent.md" ]; then
-    cp "$AGENTS_DIR/builder.md" "$AGENTS_DIR/agent.md"
-fi
-
-# 2. Install CLI binary
-echo -e "  ${C_CYAN}›${C_RESET} Memasang tools 'opencode-agents' ke terminal..."
-if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/bin/opencode-agents" ]; then
-    cp "$SCRIPT_DIR/bin/opencode-agents" "$AGENT_BIN" 2>/dev/null || true
-    chmod +x "$AGENT_BIN" 2>/dev/null || true
+## 2. Engineering Standards
+- Write clean, modular, and type-safe code.
+- Prioritize high performance, zero-copy memory patterns, and minimal latency.
+- Handle edge cases, runtime exceptions, and input validation proactively.
+- Never substitute stubs, placeholders, or pseudocode for working implementations.
+EOF
 else
-    curl -fsSL "https://raw.githubusercontent.com/rndsa/opencode-agents/main/bin/opencode-agents?v=$(date +%s)" -o "$AGENT_BIN" 2>/dev/null || true
-    chmod +x "$AGENT_BIN" 2>/dev/null || true
+    echo -e "  ${C_GREEN}✓${C_RESET} File agent.md yang ada tetap dipertahankan."
 fi
 
-# 3. Auto-link to MT Manager / Internal Storage
-echo -e "  ${C_CYAN}›${C_RESET} Menyambungkan shortcut ke MT Manager (/sdcard/agent.md)..."
-if [ -d "/sdcard" ]; then
-    ln -sf "$AGENTS_DIR/agent.md" "$MT_STORAGE_FILE" 2>/dev/null || cp "$AGENTS_DIR/agent.md" "$MT_STORAGE_FILE" 2>/dev/null || true
-fi
+# Mirror to AGENTS.md for ambient discovery
+cp "$AGENT_FILE" "$CONFIG_DIR/AGENTS.md" 2>/dev/null || true
 
-echo -e "\n  ${C_GREEN}✓ Selesai! Membuka Agents Hub...${C_RESET}\n"
-sleep 0.8
+# 2. Hardwire into opencode.json so OpenCode injects agent.md into every turn
+echo -e "  ${C_CYAN}›${C_RESET} Menghubungkan agent.md ke opencode.json..."
 
-if [ -f "$AGENT_BIN" ]; then
-    exec "$AGENT_BIN"
+python3 - << 'PY' 2>/dev/null || node - << 'JS' 2>/dev/null || true
+import json, os
+
+path = os.path.expanduser("~/.config/opencode/opencode.json")
+cfg = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r") as f:
+            cfg = json.load(f)
+    except:
+        pass
+
+cfg["$schema"] = cfg.get("$schema", "https://opencode.ai/config.json")
+
+# Add to instructions
+instructions = cfg.get("instructions", [])
+rule = "{file:~/.config/opencode/agent.md}"
+if rule not in instructions:
+    instructions.insert(0, rule)
+cfg["instructions"] = instructions
+
+# Add to build agent prompt
+agent = cfg.get("agent", {})
+build = agent.get("build", {})
+build["prompt"] = "{file:~/.config/opencode/agent.md}"
+agent["build"] = build
+cfg["agent"] = agent
+
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+PY
+const fs = require("fs");
+const path = process.env.HOME + "/.config/opencode/opencode.json";
+let cfg = {};
+try { cfg = JSON.parse(fs.readFileSync(path, "utf8")); } catch(e){}
+cfg.$schema = cfg.$schema || "https://opencode.ai/config.json";
+cfg.instructions = cfg.instructions || [];
+const rule = "{file:~/.config/opencode/agent.md}";
+if (!cfg.instructions.includes(rule)) {
+    cfg.instructions.unshift(rule);
+}
+cfg.agent = cfg.agent || {};
+cfg.agent.build = cfg.agent.build || {};
+cfg.agent.build.prompt = rule;
+fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
+JS
+
+# 3. Install CLI helper 'opencode-agent'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/bin/opencode-agent" ]; then
+    cp "$SCRIPT_DIR/bin/opencode-agent" "$CLI_BIN" 2>/dev/null || true
+else
+    curl -fsSL "https://raw.githubusercontent.com/rndsa/opencode-agents/main/bin/opencode-agent?v=$(date +%s)" -o "$CLI_BIN" 2>/dev/null || true
 fi
+chmod +x "$CLI_BIN" 2>/dev/null || true
+
+echo ""
+echo -e "  ${C_GREEN}${C_BOLD}✓ Berhasil terpasang!${C_RESET}"
+echo -e "  OpenCode sekarang otomatis membaca ${C_CYAN}agent.md${C_RESET} di setiap request ke AI."
+echo ""
+echo -e "  ${C_WHITE}Lokasi file :${C_RESET} ${C_CYAN}$AGENT_FILE${C_RESET}"
+echo -e "  ${C_WHITE}Perintah CLI:${C_RESET} ${C_CYAN}opencode-agent${C_RESET} ${C_DIM}(kelola/edit soul prompt)${C_RESET}\n"
